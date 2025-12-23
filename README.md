@@ -42,23 +42,8 @@ Rather than focusing only on moving data from point A to point B, this project e
 
 **High-level architecture:**
 
-External Client
-↓
-API Gateway
-↓
-Lambda (Validation)
-├── Invalid Data → S3 Error Bucket
-↓
-Kinesis Data Streams
-↓
-Kinesis Data Firehose
-↓
-S3 Landing Bucket
-↓
-Snowpipe (Auto-Ingest)
-↓
-Snowflake Raw Table
-
+External Client → API Gateway → Lambda (Validation) → Kinesis Data Streams → Kinesis Data Firehose → S3 Landing Bucket → Snowpipe (Auto-Ingest) → Snowflake Raw Table
+                                 ├── Invalid Data → S3 Error Bucket
 
 This design ensures that **only validated data** enters the streaming system and downstream analytics environment.
 
