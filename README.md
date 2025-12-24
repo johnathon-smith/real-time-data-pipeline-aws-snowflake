@@ -65,6 +65,10 @@ This design ensures that **only validated data** enters the streaming system and
 
 ## End-to-End Data Flow
 
+### API Ingestion
+
+![API Gateway Stage](screenshots/01_ingestion/api-gateway-stage-and-endpoint.png)
+
 1. An external client sends a JSON payload via an HTTP POST request.
 2. **API Gateway** receives the request and forwards it to AWS Lambda using a proxy integration.
 3. **Lambda** parses and validates the payload:
@@ -76,6 +80,11 @@ This design ensures that **only validated data** enters the streaming system and
 ---
 
 ## Data Validation & Error Handling
+
+### Lambda Validation & Routing
+
+![Lambda Overview](screenshots/02_validation/lambda-overview-and-role.png)
+![Lambda Execution Role](screenshots/02_validation/lambda-executor-role.png)
 
 Data validation occurs **before** the data enters the streaming layer.
 
@@ -89,6 +98,10 @@ Data validation occurs **before** the data enters the streaming layer.
 - Invalid or malformed records are written directly to a dedicated **S3 error bucket**
 - Invalid data is prevented from entering Kinesis, Firehose, and Snowflake
 
+### S3 Error Isolation
+
+![S3 Error Bucket](screenshots/04_storage/bad-data-in-error-bucket.png)
+
 This approach prevents:
 - Stream pollution
 - Downstream ingestion failures
@@ -100,16 +113,22 @@ This approach prevents:
 
 ### Kinesis Data Streams
 
+![Kinesis Data Stream](screenshots/03_streaming/kinesis-data-stream.png)
+
 - Serves as the real-time ingestion backbone
 - Default shard configuration used for simplicity
 
 ### Kinesis Data Firehose
 
-- **Source:** Kinesis Data Streams
-- **Destination:** S3 landing bucket
-- **Buffer size:** 1 MiB
-- **Buffer interval:** 5 seconds
-- **File format:** JSON (`.json`)
+![Firehose Overview](screenshots/03_streaming/firehose-overview.png)
+![Firehose Buffer Settings](screenshots/03_streaming/firehose-buffer-settings.png)
+
+**Configuration highlights:**  
+- Source: Kinesis Data Streams  
+- Destination: S3 landing bucket  
+- Buffer size: **1 MiB**  
+- Buffer interval: **5 seconds**  
+- Output format: JSON (`.json`)  
 
 These settings prioritize **low-latency delivery** while still producing file sizes suitable for efficient downstream ingestion.
 The buffer size and buffer interval were only so small for the sake of this project. In production, unless otherwise required by the business needs, I would increase both the buffer size and 
@@ -120,16 +139,28 @@ This would result in more efficient operation, making the pipeline both faster a
 
 ## Snowflake Ingestion (Snowpipe)
 
-Snowflake ingestion is fully automated using **Snowpipe with auto-ingest enabled**.
+### S3 Landing Bucket
 
-### Components
+![S3 Landing Bucket](screenshots/04_storage/good-data-in-s3-data-bucket.png)
 
-- S3 storage integration with IAM role trust relationship
-- External stage pointing to the S3 landing bucket
-- Raw table designed to store JSON payloads as received
-- SQS notifications trigger Snowpipe upon file arrival
+Validated data is delivered to S3 and automatically ingested into Snowflake using Snowpipe.
 
-This event-driven ingestion pattern eliminates the need for scheduled batch jobs and reduces operational overhead.
+---
+
+### Snowpipe Auto-Ingest
+
+![Snowpipe SHOW PIPES](screenshots/05_snowflake/snowpipe-show-pipes.png)
+![Snowpipe Running](screenshots/05_snowflake/snowpipe-running.png)
+
+Snowpipe is configured with auto-ingest enabled, triggered by SQS notifications on new S3 object creation.
+
+---
+
+### Raw Table Verification
+
+![Snowflake Raw Table](screenshots/05_snowflake/raw-table-select.png)
+
+Incoming JSON data is stored in a raw table exactly as received, preserving full fidelity for downstream transformations.
 
 ---
 
@@ -139,12 +170,16 @@ Testing was performed using **Postman** to validate both success and failure sce
 
 ### Valid Data Test
 
+![Postman Valid Request](screenshots/06_testing/postman-valid-request.png)
+
 - Sent JSON payload containing all required fields
 - Verified:
   - File creation in the S3 landing bucket
   - Successful ingestion into the Snowflake raw table
 
 ### Invalid Data Test
+
+![Postman Invalid Request](screenshots/06_testing/postman-invalid-request.png)
 
 - Sent JSON payload with a missing `id` field
 - Verified:
